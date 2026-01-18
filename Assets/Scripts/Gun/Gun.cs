@@ -5,36 +5,50 @@ using Unity.Cinemachine;
 using UnityEngine;
 using UnityEngine.Pool;
 
+/*
+BU SCRIPT NE YAPIYOR?
+---------------------
+Bu kod, oyuncunun silahını kontrol eder:
+
+- Mouse’a doğru döner
+- Sol mouse basılıysa mermi ateşler
+- G tuşuna basılırsa el bombası fırlatır
+- Mermi ve el bombası için cooldown (bekleme) yönetir
+- Mermi havuzunu (Object Pool) kullanır
+- Ateş animasyonu oynatır
+- Kamera sarsıntısı ve namlu flaşı efekti ekler
+*/
+
 public class Gun : MonoBehaviour
 {
-    // Silah ateşlendiğinde tetiklenecek event. Bu sınıf içinde kullanılıyor.
-    public static Action OnShoot;
-    public static Action OnGrenadeShoot;
+    // Silah ateşlendiğinde tetiklenecek olaylar
+    public static Action OnShoot;          // Mermi ateşlendiğinde
+    public static Action OnGrenadeShoot;   // El bombası fırlatıldığında
 
     [SerializeField] private Transform _bulletSpawnPoint; // Merminin çıkacağı nokta
+
     [Header("Bullet")]
     [SerializeField] private Bullet _bulletPrefab;        // Havuzdan üretilecek mermi prefab'ı
-    [SerializeField] private float _gunFireCD = .5f;      // Ateş etme gecikmesi (cooldown)
-    [SerializeField] private GameObject _muzzleFlash;
+    [SerializeField] private float _gunFireCD = .5f;      // Mermi ateşleme gecikmesi
+    [SerializeField] private GameObject _muzzleFlash;     // Ateş efekti
     [SerializeField] private float _muzzleFlashTime = 0.05f;
 
     [Header("Grenade")]
     [SerializeField] private GameObject _grenadePrefab;
-    [SerializeField] private float _grenadeShootCD = .9f;      // Ateş etme gecikmesi (cooldown)
-
+    [SerializeField] private float _grenadeShootCD = .9f; // El bombası ateşleme gecikmesi
 
     private Coroutine _muzzleFlashRoutine;
-    private ObjectPool<Bullet> _bulletPool;               // Mermileri yöneten Object Pool
+    private ObjectPool<Bullet> _bulletPool; // Mermi havuzu
 
-    private static readonly int FIRE_HASH = Animator.StringToHash("Fire"); // Fire animasyonu hash değeri
-    private Vector2 _mousePos;                            // Maus'un world pozisyonu
-    private float _lastFireTime = 0f;                     // Son ateş zamanının kaydı
-    private float _lastGrenadeTime = 0f;                     // Son ateş zamanının kaydı
+    private static readonly int FIRE_HASH = Animator.StringToHash("Fire"); // Ateş animasyonu hash
+    private Vector2 _mousePos;                // Mouse’un oyun içi pozisyonu
+    private float _lastFireTime = 0f;         // Son mermi ateş zamanı
+    private float _lastGrenadeTime = 0f;      // Son el bombası ateş zamanı
 
     private PlayerInput _playerInput;
     private FrameInput _frameInput;
-    private Animator _animator;                           // Silah animasyon komponenti
-    private CinemachineImpulseSource _impulseSource;      // Kamera sarsıntısı kaynağı
+    private Animator _animator;               // Silah animasyon komponenti
+    private CinemachineImpulseSource _impulseSource; // Kamera sarsıntısı kaynağı
 
     void Awake()
     {
@@ -46,25 +60,25 @@ public class Gun : MonoBehaviour
 
     void Start()
     {
-        // Mermi havuzunu başlangıçta oluşturuyoruz
-        CreateBulletPool();
+        CreateBulletPool(); // Mermi havuzunu oluştur
     }
 
     private void Update()
     {
-        GatherInput();
-        Shoot();        // Sol mouse basılıysa ateş etmeye çalış
-        RotateGun();    // Silahı mouse yönüne döndür
+        GatherInput(); // Inputları al
+        Shoot();       // Sol mouse basılıysa mermi veya el bombası ateşle
+        RotateGun();   // Silahı mouse yönüne döndür
     }
 
     void OnEnable()
     {
-        // Event’e metodlar ekleniyor (ateş sırası)
-        OnShoot += ResetLastFireTime;   // Cooldown yenile
-        OnShoot += ShootProjectile;     // Mermiyi oluştur
-        OnShoot += FireAnimation;       // Animasyonu tetikle
-        OnShoot += GunScreenShake;      // Kamera sarsıntısı yap
+        // Olaylara metodlar ekleniyor
+        OnShoot += ResetLastFireTime;
+        OnShoot += ShootProjectile;
+        OnShoot += FireAnimation;
+        OnShoot += GunScreenShake;
         OnShoot += MuzzleFlash;
+
         OnGrenadeShoot += ShootGrenade;
         OnGrenadeShoot += FireAnimation;
         OnGrenadeShoot += ResetLastGrenadeShootTime;
@@ -72,99 +86,86 @@ public class Gun : MonoBehaviour
 
     void OnDisable()
     {
-        // Event’den metodlar çıkarılıyor
+        // Olaylardan metodlar çıkarılıyor
         OnShoot -= ResetLastFireTime;
         OnShoot -= ShootProjectile;
         OnShoot -= FireAnimation;
         OnShoot -= GunScreenShake;
         OnShoot -= MuzzleFlash;
+
         OnGrenadeShoot -= ShootGrenade;
         OnGrenadeShoot -= FireAnimation;
         OnGrenadeShoot -= ResetLastGrenadeShootTime;
-
-
     }
 
-    // Mermiyi havuza geri gönderir
+    // Mermiyi havuza geri gönder
     public void ReleaseBulletFromPool(Bullet bullet)
     {
         _bulletPool.Release(bullet);
     }
 
-
     private void GatherInput()
     {
         _frameInput = _playerInput.FrameInput;
-
     }
 
-
-    // Object Pool ayarları
+    // Mermi havuzunu oluştur
     private void CreateBulletPool()
     {
         _bulletPool = new ObjectPool<Bullet>(() =>
         {
-            // Yeni mermi instantiate edildiğinde
-            return Instantiate(_bulletPrefab);
-
+            return Instantiate(_bulletPrefab); // Yeni mermi oluştur
         },
         bullet =>
         {
-            // Havuzdan çekildiğinde aktif edilir
-            bullet.gameObject.SetActive(true);
-
+            bullet.gameObject.SetActive(true);  // Havuzdan çekildiğinde aktif et
         },
         bullet =>
         {
-            // Havuzdan çıkarıldığında pasif hale getirilir
-            bullet.gameObject.SetActive(false);
-
+            bullet.gameObject.SetActive(false); // Havuzdan çıkarıldığında pasif yap
         },
         bullet =>
         {
-            // Havuz kapasitesi düşerse mermi tamamen yok edilir
-            Destroy(bullet.gameObject);
-
+            Destroy(bullet.gameObject);         // Havuz kapasitesi düşerse yok et
         },
-        false,    // Havuz önceden doldurulmayacak
-        20,       // Minimum havuz büyüklüğü
-        50        // Maksimum havuz büyüklüğü
-        );
+        false, 20, 50);
     }
 
-    // Ateş etme girişini kontrol eder
+    // Mermi ve el bombası ateş kontrolü
     private void Shoot()
     {
         if (Input.GetMouseButton(0) && Time.time >= _lastFireTime)
         {
-            OnShoot?.Invoke(); // Event'teki tüm fonksiyonlar çalıştırılır
+            OnShoot?.Invoke(); // Mermi ateşle
         }
+
         if (_frameInput.Grenade && Time.time >= _lastGrenadeTime)
         {
-            OnGrenadeShoot?.Invoke();
+            OnGrenadeShoot?.Invoke(); // El bombası fırlat
         }
     }
 
-    // Havuzdan mermi alıp ateşler
+    // Havuzdan mermi al ve ateşle
     private void ShootProjectile()
     {
-        Bullet newBullet = _bulletPool.Get(); // Havuzdan mermi çek
-        newBullet.Init(this, _bulletSpawnPoint.position, _mousePos); // Mermiye başlangıç verilerini gönder
+        Bullet newBullet = _bulletPool.Get();
+        newBullet.Init(this, _bulletSpawnPoint.position, _mousePos);
     }
 
+    // El bombası fırlat
     private void ShootGrenade()
     {
         Instantiate(_grenadePrefab, _bulletSpawnPoint.position, Quaternion.identity);
         _lastGrenadeTime = Time.time;
     }
 
-    // Fire animasyonu oynatır
+    // Ateş animasyonu oynat
     private void FireAnimation()
     {
         _animator.Play(FIRE_HASH, 0, 0f);
     }
 
-    // Cooldown zamanını günceller
+    // Cooldown zamanlarını ayarla
     private void ResetLastFireTime()
     {
         _lastFireTime = Time.time + _gunFireCD;
@@ -174,26 +175,22 @@ public class Gun : MonoBehaviour
         _lastGrenadeTime = Time.time + _grenadeShootCD;
     }
 
-    // Kamera sarsıntısı oluşturur
+    // Kamera sarsıntısı
     private void GunScreenShake()
     {
         _impulseSource.GenerateImpulse();
     }
 
-    // Silahı mouse pozisyonuna döndürür
+    // Silahı mouse yönüne döndür
     private void RotateGun()
     {
-        // Mouse world pozisyonu alınıyor
         _mousePos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
-        // Mouse pozisyonu player'ın local koordinatına çevriliyor
-        // (Player child olduğu için böyle kullanılmış)
         Vector2 direction = PlayerController.Instance.transform.InverseTransformPoint(_mousePos);
-        // Açı hesaplanıyor
         float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
-        // Silaha local olarak açı uygulanıyor
         transform.localRotation = Quaternion.Euler(0, 0, angle);
     }
 
+    // Namlu flaşı efekti
     private void MuzzleFlash()
     {
         if (_muzzleFlash != null)
