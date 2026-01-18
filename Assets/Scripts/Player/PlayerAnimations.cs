@@ -143,7 +143,7 @@ public class PlayerAnimations : MonoBehaviour
     */
     private void DetectMoveDust()
     {
-        if (!PlayerController.Instance.CheckGrounded())
+        if (PlayerController.Instance.CheckGrounded())
         {
             if (!_moveDustVFX.isPlaying)
             {
