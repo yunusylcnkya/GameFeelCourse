@@ -3,23 +3,31 @@ using Unity.Cinemachine;
 using UnityEngine;
 using UnityEngine.UI;
 
+/*
+BU SCRIPT NE YAPIYOR?
+---------------------
+Bu kod, oyun içi ekranı siyah yapıp açarak "fade in/out" efekti verir
+ve oyuncu öldüğünde veya yenilendiğinde onu belirlenen noktada tekrar doğurur.
+*/
+
 [RequireComponent(typeof(Image))]
 public class Fade : MonoBehaviour
 {
     [Header("Fade Settings")]
-    [SerializeField] private float fadeTime = 1.4f;
+    [SerializeField] private float fadeTime = 1.4f; // Fade süresi
 
     [Header("Respawn Settings")]
-    [SerializeField] private GameObject playerPrefab;
-    [SerializeField] private Transform respawnPoint;
+    [SerializeField] private GameObject playerPrefab; // Yeniden doğacak oyuncu prefab'ı
+    [SerializeField] private Transform respawnPoint; // Doğma noktası
 
     [Header("References")]
-    [SerializeField] private CinemachineVirtualCamera virtualCam;
+    [SerializeField] private CinemachineVirtualCamera virtualCam; // Kamera
 
-    private Image image;
+    private Image image; // Ekranı kaplayan UI Image
     private Coroutine fadeCoroutine;
-    private Transform currentPlayer;
+    private Transform currentPlayer; // Şu anki oyuncu
 
+    // Başlangıçta gerekli referansları al
     private void Awake()
     {
         image = GetComponent<Image>();
@@ -28,23 +36,26 @@ public class Fade : MonoBehaviour
             virtualCam = FindFirstObjectByType<CinemachineVirtualCamera>();
     }
 
+    // Fade başlatmak için çağrılır
     public void FadeInAndOut()
     {
         if (fadeCoroutine != null)
-            StopCoroutine(fadeCoroutine);
+            StopCoroutine(fadeCoroutine); // Önceki fade durdur
 
         fadeCoroutine = StartCoroutine(FadeSequence());
     }
 
+    // Fade işlemi ve respawn sırası
     private IEnumerator FadeSequence()
     {
-        yield return FadeRoutine(1f);
-        Respawn();
-        yield return FadeRoutine(0f);
+        yield return FadeRoutine(1f); // Ekranı siyah yap
+        Respawn();                    // Oyuncuyu tekrar doğur
+        yield return FadeRoutine(0f); // Ekranı tekrar aç
 
         fadeCoroutine = null;
     }
 
+    // Belirli bir alfa değerine fade yap
     private IEnumerator FadeRoutine(float targetAlpha)
     {
         float elapsed = 0f;
@@ -54,7 +65,7 @@ public class Fade : MonoBehaviour
         while (elapsed < fadeTime)
         {
             elapsed += Time.deltaTime;
-            color.a = Mathf.Lerp(startAlpha, targetAlpha, elapsed / fadeTime);
+            color.a = Mathf.Lerp(startAlpha, targetAlpha, elapsed / fadeTime); // Yumuşak geçiş
             image.color = color;
             yield return null;
         }
@@ -63,17 +74,20 @@ public class Fade : MonoBehaviour
         image.color = color;
     }
 
+    // Oyuncuyu doğur
     private void Respawn()
     {
         if (currentPlayer != null)
-            Destroy(currentPlayer.gameObject);
+            Destroy(currentPlayer.gameObject); // Eski oyuncuyu sil
 
+        // Yeni oyuncuyu spawn noktasında oluştur
         currentPlayer = Instantiate(
             playerPrefab,
             respawnPoint.position,
             Quaternion.identity
         ).transform;
 
+        // Kamera yeni oyuncuyu takip etsin
         if (virtualCam != null)
             virtualCam.Follow = currentPlayer;
     }

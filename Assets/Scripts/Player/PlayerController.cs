@@ -126,6 +126,11 @@ public class PlayerController : MonoBehaviour
         ExtraGravity();
     }
 
+    void OnDestroy()
+    {
+        Fade fade = FindFirstObjectByType<Fade>();
+        fade?.FadeInAndOut();
+    }
     /*
     YERDE Mİ KONTROLÜ:
     -----------------
